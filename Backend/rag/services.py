@@ -13,6 +13,7 @@ from openai import OpenAI
 from pypdf import PdfReader
 
 from audit.services import AuditService
+from rag.models import DocumentChunk
 
 
 class DocumentProcessingService:
@@ -20,6 +21,7 @@ class DocumentProcessingService:
 
     def __init__(self, storage_path: str | None = None) -> None:
         self.storage_path = storage_path or os.path.join(os.getcwd(), "uploads")
+        self.embedding_service = EmbeddingService()
         Path(self.storage_path).mkdir(parents=True, exist_ok=True)
 
     def process_upload(self, file: UploadedFile, title: str | None = None) -> "Document":
@@ -54,6 +56,7 @@ class DocumentProcessingService:
                 document=document,
                 chunk_index=index,
                 content=content,
+                embedding=self.embedding_service.generate_embedding(content),
                 embedding_metadata={"source_file": document.filename},
             )
 
@@ -137,19 +140,39 @@ class RetrievalService:
         }
 
     def retrieve(self, question: str, limit: int = 5) -> list[dict[str, Any]]:
-        """Return the top matching chunks for a question."""
+        """Return the top matching chunks for a question from persisted document embeddings."""
         question_embedding = self.embedding_service.generate_embedding(question)
         scored_chunks: list[tuple[float, dict[str, Any]]] = []
-        for content, embedding in self.chunk_store.items():
-            similarity = self._cosine_similarity(question_embedding, embedding)
-            if content and any(token in content.lower() for token in ["password", "credential", "protect", "share"]):
-                similarity += 0.25
-            scored_chunks.append((similarity, {"content": content, "embedding": embedding}))
+
+        if self.chunk_store:
+            for content, embedding in self.chunk_store.items():
+                similarity = self._cosine_similarity(question_embedding, embedding)
+                if content and any(token in content.lower() for token in ["password", "credential", "protect", "share"]):
+                    similarity += 0.25
+                scored_chunks.append((similarity, {"content": content, "embedding": embedding}))
+        else:
+            document_chunks = DocumentChunk.objects.select_related("document").filter(document__status="ready")
+            for chunk in document_chunks:
+                embedding = self._coerce_embedding(chunk.embedding)
+                similarity = self._cosine_similarity(question_embedding, embedding)
+                if chunk.content and any(token in chunk.content.lower() for token in ["password", "credential", "protect", "share"]):
+                    similarity += 0.25
+                scored_chunks.append((similarity, {"content": chunk.content, "embedding": embedding}))
 
         scored_chunks.sort(key=lambda item: item[0], reverse=True)
         results = [chunk for _, chunk in scored_chunks[:limit]]
         AuditService.log_event("retrieval_completed", {"question": question, "results": [item["content"] for item in results]})
         return results
+
+    def _coerce_embedding(self, embedding: Any) -> list[float]:
+        """Normalize embedding values from the database into a Python list."""
+        if isinstance(embedding, list):
+            return [float(value) for value in embedding]
+        if isinstance(embedding, tuple):
+            return [float(value) for value in embedding]
+        if isinstance(embedding, dict):
+            return [float(value) for value in embedding.values()]
+        return []
 
     def _cosine_similarity(self, left: list[float], right: list[float]) -> float:
         """Compute cosine similarity between two embedding vectors."""

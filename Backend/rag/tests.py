@@ -46,6 +46,26 @@ class RAGPipelineTests(TestCase):
         self.assertGreaterEqual(len(chunks), 2)
         self.assertTrue(all(chunk for chunk in chunks))
 
+    def test_document_chunks_store_embedding_vectors(self) -> None:
+        writer = PdfWriter()
+        writer.add_blank_page(width=72, height=72)
+        pdf_bytes = BytesIO()
+        writer.write(pdf_bytes)
+        pdf_bytes.seek(0)
+
+        uploaded_file = SimpleUploadedFile(
+            "policy.pdf",
+            pdf_bytes.getvalue(),
+            content_type="application/pdf",
+        )
+
+        document = self.processing_service.process_upload(uploaded_file, title="Policy guide")
+        first_chunk = document.chunks.order_by("chunk_index").first()
+
+        self.assertIsNotNone(first_chunk)
+        self.assertTrue(first_chunk.embedding)
+        self.assertEqual(len(first_chunk.embedding), 1536)
+
     def test_embedding_generation_returns_vectors(self) -> None:
         embedding = self.embedding_service.generate_embedding("customer refund policy")
 

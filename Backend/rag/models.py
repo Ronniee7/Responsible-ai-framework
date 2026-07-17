@@ -1,7 +1,21 @@
+import os
 import uuid
 
 from django.conf import settings
 from django.db import models
+
+try:
+    from pgvector.django import VectorField as PgVectorField
+except ImportError:  # pragma: no cover - optional dependency fallback
+    PgVectorField = None
+
+
+def _get_embedding_field() -> models.Field:
+    """Return a pgvector-backed field for PostgreSQL and a JSON fallback for local development."""
+    backend = settings.DATABASES.get('default', {}).get('ENGINE', '')
+    if backend.endswith('postgresql') and PgVectorField is not None:
+        return PgVectorField(dimensions=1536, blank=True, null=True)
+    return models.JSONField(default=list, blank=True)
 
 
 class Document(models.Model):
@@ -25,12 +39,13 @@ class Document(models.Model):
 
 
 class DocumentChunk(models.Model):
-    """Stores a chunk of text extracted from a document."""
+    """Stores a chunk of text extracted from a document and its embedding vector."""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="chunks")
     chunk_index = models.PositiveIntegerField()
     content = models.TextField()
+    embedding = _get_embedding_field()
     embedding_metadata = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

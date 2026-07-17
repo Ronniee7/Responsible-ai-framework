@@ -27,11 +27,6 @@ class ChatService:
 
     def generate_response(self, user_message: str) -> ChatMessageResult:
         """Create a response using retrieved document context and governance checks."""
-        self.retrieval_service.chunk_store = {
-            "Customer support should never share passwords.": [0.1] * 1536,
-            "Refunds take up to five business days.": [0.2] * 1536,
-            "Warranty claims require proof of purchase.": [0.3] * 1536,
-        }
         retrieved_chunks = self.retrieval_service.retrieve(user_message, limit=3)
         prompt = self.prompt_builder.build_prompt(
             question=user_message,
