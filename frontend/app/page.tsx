@@ -1,65 +1,97 @@
-import Image from "next/image";
+'use client';
+
+import { useState } from 'react';
+import axios from 'axios';
 
 export default function Home() {
+  const [message, setMessage] = useState('');
+  const [response, setResponse] = useState('');
+  const [explanation, setExplanation] = useState('');
+  const [governance, setGovernance] = useState<Record<string, unknown> | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setLoading(true);
+    setResponse('');
+    setExplanation('');
+    setGovernance(null);
+
+    try {
+      const { data } = await axios.post('http://127.0.0.1:8000/api/chat/', {
+        message,
+      });
+
+      setResponse(data.response);
+      setExplanation(data.explanation);
+      setGovernance(data.governance);
+    } catch (error) {
+      setResponse('The request could not be completed. Ensure the Django backend is running.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <main className="min-h-screen bg-slate-950 px-6 py-12 text-slate-100">
+      <div className="mx-auto flex max-w-5xl flex-col gap-8 rounded-3xl border border-slate-800 bg-slate-900/80 p-8 shadow-2xl shadow-slate-950/30">
+        <header className="space-y-3">
+          <p className="text-sm uppercase tracking-[0.3em] text-cyan-400">Responsible AI Framework</p>
+          <h1 className="text-3xl font-semibold sm:text-4xl">Governance-integrated customer support demo</h1>
+          <p className="max-w-3xl text-base text-slate-300">
+            This MVP demonstrates a layered architecture where chat responses are evaluated for toxicity, policy compliance, and review risk before being returned.
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+        </header>
+
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
+          <label className="text-sm font-medium text-slate-200" htmlFor="message">
+            Ask a support question
+          </label>
+          <textarea
+            id="message"
+            rows={4}
+            value={message}
+            onChange={(event) => setMessage(event.target.value)}
+            placeholder="Try asking about a policy or requesting a password..."
+            className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm text-slate-100 outline-none ring-0 placeholder:text-slate-500"
+          />
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-fit rounded-full bg-cyan-500 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-70"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+            {loading ? 'Analyzing…' : 'Send to AI'}
+          </button>
+        </form>
+
+        <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+          <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
+            <h2 className="text-lg font-semibold text-white">Response</h2>
+            <p className="mt-3 whitespace-pre-line text-sm leading-7 text-slate-300">
+              {response || 'No response yet.'}
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
+            <h2 className="text-lg font-semibold text-white">Governance summary</h2>
+            {governance ? (
+              <ul className="mt-3 space-y-2 text-sm text-slate-300">
+                <li>Policy compliant: {String(governance.policy_compliant)}</li>
+                <li>Toxicity score: {String(governance.toxicity_score)}</li>
+                <li>Risk score: {String(governance.risk_score)}</li>
+                <li>Human review: {String(governance.requires_human_review)}</li>
+              </ul>
+            ) : (
+              <p className="mt-3 text-sm text-slate-400">Governance results will appear here.</p>
+            )}
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
+          <h2 className="text-lg font-semibold text-white">Explanation</h2>
+          <p className="mt-3 text-sm leading-7 text-slate-300">{explanation || 'Explanation will be generated after the request is evaluated.'}</p>
+        </section>
+      </div>
+    </main>
   );
 }

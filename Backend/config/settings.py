@@ -37,6 +37,17 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'rest_framework',
+    'drf_spectacular',
+    'api',
+    'audit',
+    'authentication',
+    'chat',
+    'explainability',
+    'governance',
+    'monitoring',
+    'rag',
+    'users',
 ]
 
 MIDDLEWARE = [
@@ -115,3 +126,14 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+
+REST_FRAMEWORK = {
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Responsible AI Framework API',
+    'DESCRIPTION': 'Enterprise-grade RAG, governance, and chat API.',
+    'VERSION': '1.0.0',
+}
+
