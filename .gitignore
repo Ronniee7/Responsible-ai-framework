@@ -24,3 +24,13 @@ node_modules/
 # OS
 .DS_Store
 Thumbs.db
+
+PROJECT_CONTEXT.md
+
+# Local environment variables
+.env
+Backend/.env
+
+
+# Local runtime uploads
+Backend/uploads/
