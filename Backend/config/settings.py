@@ -98,6 +98,7 @@ if USE_POSTGRES:
             'HOST': os.getenv('DATABASE_HOST', 'localhost'),
             'PORT': os.getenv('DATABASE_PORT', '5432'),
         }
+        
     }
 else:
     DATABASES = {
