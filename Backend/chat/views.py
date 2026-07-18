@@ -7,13 +7,19 @@ from chat.services import ChatService
 
 
 class ChatView(APIView):
-    """Handle chat requests and return a governance-aware response."""
+    """Handle chat requests and return a governance-aware response with full metadata."""
 
     def post(self, request, *args, **kwargs):
         serializer = ChatRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        service = ChatService()
-        result = service.generate_response(serializer.validated_data["message"])
+        validated_data = serializer.validated_data
+        message = validated_data["message"]
+        provider_name = validated_data.get("provider", "openai")
+
+        service = ChatService(provider_name=provider_name)
+        result = service.generate_response(message)
+
+        # Use the result as a dict for the serializer
         payload = ChatResponseSerializer(result.__dict__).data
         return Response(payload, status=status.HTTP_200_OK)

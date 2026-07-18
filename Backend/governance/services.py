@@ -1,43 +1,49 @@
 from __future__ import annotations
 
-import re
 from typing import Any
+
+from governance.services.governance_pipeline import GovernancePipeline
+
+# Backward-compatible wrapper that delegates to the new pipeline
+_pipeline_instance: GovernancePipeline | None = None
+
+
+def _get_pipeline() -> GovernancePipeline:
+    global _pipeline_instance
+    if _pipeline_instance is None:
+        _pipeline_instance = GovernancePipeline()
+    return _pipeline_instance
 
 
 class GovernanceService:
-    """Provide lightweight governance checks for generated responses."""
+    """Provide governance checks for generated responses.
+
+    This class is maintained for backward compatibility.
+    New code should use GovernancePipeline directly.
+    """
 
     @staticmethod
     def evaluate_response(response_text: str) -> dict[str, Any]:
-        """Evaluate a response for toxicity, policy risk, and review needs."""
-        normalized = (response_text or "").strip().lower()
+        """Evaluate a response for toxicity, policy risk, and review needs.
 
-        toxicity_score = 0.0
-        toxic_terms = ["idiot", "stupid", "fired", "hate", "worthless"]
-        for term in toxic_terms:
-            if term in normalized:
-                toxicity_score += 0.35
-
-        if re.search(r"\b(password|credential|secret|token)\b", normalized):
-            toxicity_score += 0.1
-
-        toxicity_score = min(toxicity_score, 1.0)
-
-        policy_compliant = True
-        risk_score = 0.0
-        if re.search(r"\b(password|credential|secret|token)\b", normalized):
-            policy_compliant = False
-            risk_score = 0.8
-        elif toxicity_score > 0.5:
-            policy_compliant = False
-            risk_score = max(risk_score, toxicity_score)
-
-        requires_human_review = toxicity_score > 0.5 or not policy_compliant
-
+        Legacy method - delegates to the new pipeline with minimal context.
+        """
+        pipeline = _get_pipeline()
+        result = pipeline.evaluate(
+            response_text=response_text,
+            retrieved_chunks=[],
+            user_question="",
+            provider_name="unknown",
+            model_name="unknown",
+        )
         return {
-            "toxicity_score": round(toxicity_score, 2),
-            "policy_compliant": policy_compliant,
-            "risk_score": round(risk_score, 2),
-            "requires_human_review": requires_human_review,
-            "summary": "Response passed governance checks." if policy_compliant and toxicity_score <= 0.5 else "Response requires review.",
+            "toxicity_score": result.get("toxicity_score", 0.0),
+            "policy_compliant": result.get("policy_compliant", True),
+            "risk_score": result.get("bias_score", 0.0),
+            "requires_human_review": result.get("requires_human_review", False),
+            "summary": (
+                "Response passed governance checks."
+                if result.get("policy_compliant", True) and result.get("toxicity_score", 0.0) <= 0.5
+                else "Response requires review."
+            ),
         }

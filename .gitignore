@@ -30,7 +30,11 @@ PROJECT_CONTEXT.md
 # Local environment variables
 .env
 Backend/.env
+.env
+.env.*
+!.env.example
 
 
 # Local runtime uploads
 Backend/uploads/
+
