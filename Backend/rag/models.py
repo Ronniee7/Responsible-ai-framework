@@ -12,8 +12,8 @@ except ImportError:  # pragma: no cover - optional dependency fallback
 
 def _get_embedding_field() -> models.Field:
     """Return a pgvector-backed field for PostgreSQL and a JSON fallback for local development."""
-    backend = settings.DATABASES.get('default', {}).get('ENGINE', '')
-    if backend.endswith('postgresql') and PgVectorField is not None:
+    backend = settings.DATABASES.get("default", {}).get("ENGINE", "")
+    if backend.endswith("postgresql") and PgVectorField is not None:
         return PgVectorField(dimensions=1536, blank=True, null=True)
     return models.JSONField(default=list, blank=True)
 
@@ -24,6 +24,7 @@ class Document(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     title = models.CharField(max_length=255)
     filename = models.CharField(max_length=255)
+    file_size = models.BigIntegerField(null=True, blank=True)
     uploaded_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True,
@@ -36,6 +37,16 @@ class Document(models.Model):
 
     class Meta:
         ordering = ["-upload_date"]
+
+    @property
+    def chunk_count(self) -> int:
+        """Return the number of chunks associated with this document."""
+        return self.chunks.count()
+
+    @property
+    def embedding_count(self) -> int:
+        """Return the number of chunks with valid embeddings."""
+        return self.chunks.exclude(embedding__exact=[]).exclude(embedding__isnull=True).count()
 
 
 class DocumentChunk(models.Model):

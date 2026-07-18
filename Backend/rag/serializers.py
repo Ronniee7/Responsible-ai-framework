@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from rag.models import Document
+
 
 class DocumentUploadSerializer(serializers.Serializer):
     """Validate a PDF upload request."""
@@ -8,11 +10,46 @@ class DocumentUploadSerializer(serializers.Serializer):
     title = serializers.CharField(required=False, allow_blank=True)
 
 
-class DocumentMetadataSerializer(serializers.Serializer):
+class DocumentMetadataSerializer(serializers.ModelSerializer):
     """Serialize document metadata for API responses."""
 
-    id = serializers.UUIDField()
-    title = serializers.CharField()
-    filename = serializers.CharField()
-    status = serializers.CharField()
-    upload_date = serializers.DateTimeField()
+    chunk_count = serializers.IntegerField(read_only=True)
+    embedding_count = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = Document
+        fields = [
+            "id",
+            "title",
+            "filename",
+            "file_size",
+            "status",
+            "upload_date",
+            "chunk_count",
+            "embedding_count",
+        ]
+
+
+class DocumentListSerializer(serializers.ModelSerializer):
+    """Serialize a list of documents with summary fields."""
+
+    chunk_count = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = Document
+        fields = [
+            "id",
+            "title",
+            "filename",
+            "file_size",
+            "status",
+            "upload_date",
+            "chunk_count",
+        ]
+
+
+class DocumentSearchSerializer(serializers.Serializer):
+    """Validate document search requests."""
+
+    query = serializers.CharField(required=True, allow_blank=False)
+    limit = serializers.IntegerField(required=False, default=10, min_value=1, max_value=50)

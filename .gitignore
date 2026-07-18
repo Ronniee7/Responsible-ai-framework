@@ -38,3 +38,7 @@ Backend/.env
 # Local runtime uploads
 Backend/uploads/
 
+# Governance artifacts
+audit_logs/
+governance_settings.json
+

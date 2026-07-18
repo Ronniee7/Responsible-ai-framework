@@ -37,6 +37,8 @@ class DocumentProcessingService:
             for chunk in file.chunks():
                 handle.write(chunk)
 
+        file_size = destination.stat().st_size
+
         text = self.extract_text_from_pdf(destination)
         chunks = self.chunk_text(text)
         if not chunks:
@@ -46,6 +48,7 @@ class DocumentProcessingService:
             id=uuid.uuid4(),
             title=title or Path(file.name).stem,
             filename=Path(file.name).name,
+            file_size=file_size,
             uploaded_by=None,
             status="ready",
         )
@@ -62,9 +65,42 @@ class DocumentProcessingService:
 
         AuditService.log_event(
             "document_uploaded",
-            {"document_id": str(document.id), "chunk_count": len(chunks)},
+            {"document_id": str(document.id), "chunk_count": len(chunks), "file_size": file_size},
         )
         return document
+
+    def reprocess_document(self, document: "Document") -> "Document":
+        """Reprocess an existing document to regenerate chunks and embeddings."""
+        from rag.models import Document, DocumentChunk
+
+        # Find the stored file
+        for stored_file in Path(self.storage_path).iterdir():
+            if document.filename in stored_file.name:
+                text = self.extract_text_from_pdf(stored_file)
+                chunks = self.chunk_text(text)
+                if not chunks:
+                    chunks = ["No readable text could be extracted from the uploaded PDF."]
+
+                for index, content in enumerate(chunks):
+                    DocumentChunk.objects.create(
+                        id=uuid.uuid4(),
+                        document=document,
+                        chunk_index=index,
+                        content=content,
+                        embedding=self.embedding_service.generate_embedding(content),
+                        embedding_metadata={"source_file": document.filename},
+                    )
+
+                document.status = "ready"
+                document.save(update_fields=["status"])
+
+                AuditService.log_event(
+                    "document_reprocessed",
+                    {"document_id": str(document.id), "chunk_count": len(chunks)},
+                )
+                return document
+
+        raise FileNotFoundError(f"Could not find stored file for document: {document.filename}")
 
     def extract_text_from_pdf(self, file_path: Path) -> str:
         """Extract text from a PDF while tolerating malformed input."""
