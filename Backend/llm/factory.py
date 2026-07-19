@@ -21,10 +21,15 @@ class LLMFactory:
     @classmethod
     def create_provider(cls, provider_name: str | None = None) -> LLMProvider:
         cls._register_defaults()
-        resolved_name = (provider_name or os.getenv("LLM_PROVIDER", "openai")).strip().lower()
-        if not resolved_name:
-            resolved_name = "openai"
-
+        
+        print(f"DEBUG: Input argument provider_name={provider_name}")
+        print(f"DEBUG: Env variable LLM_PROVIDER={os.getenv('LLM_PROVIDER')}")
+        
+        # Changed default fallback string from "gemini" to "ollama"
+        resolved_name = (provider_name or os.getenv("LLM_PROVIDER", "ollama")).strip().lower()
+        
+        print(f"DEBUG: Final resolved provider class={resolved_name}")
+        
         if resolved_name not in cls._registry:
             raise ValueError(f"Unsupported LLM provider: {resolved_name}")
 

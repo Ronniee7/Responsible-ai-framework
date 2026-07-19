@@ -132,16 +132,16 @@ function CollapsibleSection({ title, icon, defaultOpen = false, children }: { ti
 }
 
 const providers = [
+  { id: 'ollama', label: 'Ollama', description: 'Local deployment for offline experiments', accent: 'from-emerald-500 to-lime-500' },
   { id: 'openai', label: 'OpenAI', description: 'Fast enterprise-ready chat model', accent: 'from-cyan-500 to-blue-500' },
   { id: 'gemini', label: 'Google Gemini', description: 'Multimodal and flexible inference', accent: 'from-fuchsia-500 to-violet-500' },
-  { id: 'ollama', label: 'Ollama', description: 'Local deployment for offline experiments', accent: 'from-emerald-500 to-lime-500' },
 ];
 
 export default function Home() {
   const [message, setMessage] = useState('');
   const [result, setResult] = useState<GovernanceResponse | null>(null);
   const [loading, setLoading] = useState(false);
-  const [selectedProvider, setSelectedProvider] = useState('openai');
+  const [selectedProvider, setSelectedProvider] = useState('ollama');
   const [providerStatus, setProviderStatus] = useState('Configured for the selected provider');
 
   const activeProvider = useMemo(() => providers.find((p) => p.id === selectedProvider), [selectedProvider]);
@@ -159,36 +159,33 @@ export default function Home() {
       setResult(data as GovernanceResponse);
       setProviderStatus(`Using ${activeProvider?.label ?? 'the selected provider'}`);
     } catch (error) {
-      // On error, still create a minimal result structure
-      setResult({
-        response: 'The request could not be completed. Ensure the Django backend is running.',
-        provider: '',
-        model: '',
-        latency: 0,
-        token_usage: { prompt_tokens: 0, response_tokens: 0, total_tokens: 0 },
-        retrieved_chunks: [],
-        retrieved_documents: [],
-        confidence: { confidence_percentage: 0, confidence_level: 'very_low' },
-        hallucination_score: 0,
-        bias_score: 0,
-        toxicity_score: 0,
-        policy_compliant: false,
-        requires_human_review: true,
-        governance_summary: { overall_status: 'FAIL', requires_human_review: true, items: [] },
-        explanation: {
-          reasoning_summary: '',
-          retrieved_sources: [],
-          confidence_explanation: '',
-          governance_summary: { overall_status: 'FAIL', requires_human_review: true, items: [] },
-          human_readable_explanation: 'Request failed. Check backend connectivity or provider configuration.',
-          violation_details: [],
-        },
-        governance: {},
-      });
-      setProviderStatus('Request failed. Check backend connectivity or provider configuration.');
-    } finally {
-      setLoading(false);
+  console.error("Full Backend Error context:", error);
+  
+  if (axios.isAxiosError(error)) {
+    if (error.response) {
+      // The server received the request and responded with a non-2xx status code
+      console.error("Backend Status:", error.response.status);
+      console.error("Backend Data:", error.response.data);
+      setProviderStatus(`Backend Error (${error.response.status}): Check your browser console.`);
+    } else if (error.request) {
+      // The request was made but no response was received (e.g., server is down)
+      console.error("No response received from backend. Check if Django is running.");
+      setProviderStatus("Cannot connect to Django. Verification failed.");
+    } else {
+      // Something else happened while setting up the request
+      console.error("Axios configuration error:", error.message);
+      setProviderStatus(`Request Error: ${error.message}`);
     }
+  } else {
+    setProviderStatus('An unexpected error occurred.');
+  }
+
+  setResult(null); 
+} finally {
+  setLoading(false);
+}
+
+
   };
 
   const gs = result?.governance_summary;

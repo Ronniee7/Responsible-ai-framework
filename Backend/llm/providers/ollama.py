@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from urllib import error, request
 
@@ -11,11 +12,17 @@ class OllamaProvider(LLMProvider):
 
     def __init__(self, model_name: str | None = None) -> None:
         self.host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-        self.model_name = model_name or os.getenv("OLLAMA_MODEL", "llama3")
+        
+        # Check if you have a specific model running (like llama2, llama2.1, mistral, etc.)
+        self.model_name = model_name or os.getenv("OLLAMA_MODEL", "OLLAMA_MODEL")
 
     def generate_response(self, prompt: str) -> str:
         try:
-            payload = {"model": self.model_name, "prompt": prompt, "stream": False}
+            payload = {
+                "model": self.model_name, 
+                "prompt": prompt, 
+                "stream": False
+            }
             data = self._post_json("/api/generate", payload)
             return data.get("response", "")
         except Exception as exc:  # pragma: no cover - defensive path
@@ -36,7 +43,24 @@ class OllamaProvider(LLMProvider):
 
     def _post_json(self, endpoint: str, payload: dict) -> dict:
         url = f"{self.host.rstrip('/')}{endpoint}"
-        body = str(payload).encode("utf-8")
-        req = request.Request(url, data=body, headers={"Content-Type": "application/json"}, method="POST")
-        with request.urlopen(req, timeout=10) as response:
-            return {"response": response.read().decode("utf-8")}
+        
+        # FIX 1: Safely serialize to valid double-quoted JSON strings
+        json_data = json.dumps(payload).encode("utf-8")
+        
+        req = request.Request(
+            url, 
+            data=json_data, 
+            headers={"Content-Type": "application/json"}, 
+            method="POST"
+        )
+        
+        try:
+            with request.urlopen(req, timeout=30) as response:
+                raw_response = response.read().decode("utf-8")
+                
+                # FIX 2: Correctly decode the string response into a dict object
+                return json.loads(raw_response)
+        except error.HTTPError as e:
+            # Helpful catch-all to read out any internal messaging Ollama sends back
+            error_body = e.read().decode("utf-8") if e.fp else ""
+            raise RuntimeError(f"Ollama API returned HTTP {e.code}: {error_body or e.reason}") from e

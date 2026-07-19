@@ -5,7 +5,7 @@ class ChatRequestSerializer(serializers.Serializer):
     """Validate inbound chat requests."""
 
     message = serializers.CharField(required=True, allow_blank=False)
-    provider = serializers.CharField(required=False, allow_blank=True, default="openai")
+    provider = serializers.CharField(required=False, allow_blank=True, default="gemini")
 
 
 class ChatResponseSerializer(serializers.Serializer):
