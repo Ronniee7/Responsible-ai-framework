@@ -4,6 +4,7 @@ import time
 from typing import Any
 
 from audit.services import AuditService
+from governance.models import Review
 from governance.services.bias_service import BiasService
 from governance.services.confidence_service import ConfidenceService
 from governance.services.explanation_service import ExplanationService
@@ -143,20 +144,84 @@ class GovernancePipeline:
             },
         )
 
+        # Preserve full chunk metadata for the frontend and human review
+        full_retrieved_chunks = []
+        for chunk in retrieved_chunks:
+            if isinstance(chunk, str):
+                full_retrieved_chunks.append({
+                    "content": chunk,
+                    "score": 0.0,
+                    "similarity": 0.0,
+                    "source": "Unknown",
+                    "page": None,
+                    "title": None,
+                    "document_id": None,
+                    "chunk_index": None,
+                })
+            else:
+                full_retrieved_chunks.append({
+                    "content": chunk.get("content", ""),
+                    "score": chunk.get("score", 0.0),
+                    "similarity": chunk.get("similarity", chunk.get("score", 0.0)),
+                    "source": chunk.get("source", "Unknown"),
+                    "page": chunk.get("page"),
+                    "title": chunk.get("title"),
+                    "document_id": chunk.get("document_id"),
+                    "chunk_index": chunk.get("chunk_index"),
+                })
+
+        retrieved_docs = [
+            {
+                "index": i + 1,
+                "content_preview": c["content"][:200],
+                "score": c["score"],
+                "source": c["source"],
+                "page": c["page"],
+                "title": c["title"],
+            }
+            for i, c in enumerate(full_retrieved_chunks)
+        ]
+
+        # Step 8: Create human review record if needed
+        if requires_human_review:
+            try:
+                Review.objects.create(
+                    question=user_question,
+                    retrieved_chunks=full_retrieved_chunks,
+                    ai_response=response_text,
+                    governance_metrics={
+                        "hallucination_score": hallucination_score,
+                        "bias_score": bias_result.get("bias_score", 0.0),
+                        "toxicity_score": toxicity_result.get("toxicity", 0.0),
+                        "policy_compliant": policy_result.get("policy_compliant", True),
+                        "confidence_percentage": confidence_result.get("confidence_percentage", 0.0),
+                        "provider": provider_name,
+                        "model": model_name,
+                        "retrieval_similarity": retrieval_similarity,
+                    },
+                    status="pending",
+                )
+                AuditService.log_event(
+                    "human_review_created",
+                    {
+                        "question": user_question[:100],
+                        "provider": provider_name,
+                    },
+                )
+            except Exception as exc:
+                AuditService.log_event(
+                    "human_review_creation_failed",
+                    {"error": str(exc)},
+                )
+
         return {
             "response": response_text,
             "provider": provider_name,
             "model": model_name,
             "latency": latency,
             "token_usage": token_usage,
-            "retrieved_chunks": [chunk.get("content", "") for chunk in retrieved_chunks],
-            "retrieved_documents": [
-                {
-                    "index": i + 1,
-                    "content_preview": chunk.get("content", "")[:200],
-                }
-                for i, chunk in enumerate(retrieved_chunks)
-            ],
+            "retrieved_chunks": full_retrieved_chunks,
+            "retrieved_documents": retrieved_docs,
             "hallucination": hallucination_result,
             "bias": bias_result,
             "toxicity": toxicity_result,

@@ -27,5 +27,8 @@ class ChatResponseSerializer(serializers.Serializer):
     governance_summary = serializers.DictField(default=dict)
     explanation = serializers.DictField(default=dict)
 
+    # Intent classification
+    intent = serializers.CharField(default="knowledge_question")
+
     # Backward-compatible fields
     governance = serializers.DictField(default=dict)

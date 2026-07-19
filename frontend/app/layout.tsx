@@ -47,6 +47,9 @@ export default function RootLayout({
               <Link href="/dashboard" className="text-slate-400 transition hover:text-slate-200">
                 Dashboard
               </Link>
+              <Link href="/reviews" className="text-slate-400 transition hover:text-slate-200">
+                Reviews
+              </Link>
               <Link href="/settings" className="text-slate-400 transition hover:text-slate-200">
                 Settings
               </Link>

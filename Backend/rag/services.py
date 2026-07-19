@@ -363,8 +363,73 @@ class EmbeddingService:
             value / magnitude
             for value in vector
         ]
-    
-    ###############################################################################
+
+
+###############################################################################
+# Intent Router
+###############################################################################
+
+
+class IntentRouter:
+    """
+    Classifies user requests before invoking RAG.
+
+    Only knowledge questions should trigger document retrieval.
+    Greetings, farewells, and thanks are handled directly.
+    """
+
+    GREETING_KEYWORDS = {
+        "hello", "hi", "hey", "greetings", "good morning",
+        "good afternoon", "good evening", "howdy", "what's up",
+    }
+
+    FAREWELL_KEYWORDS = {
+        "bye", "goodbye", "see you", "farewell", "later",
+        "take care", "cya", "good night",
+    }
+
+    THANKS_KEYWORDS = {
+        "thank", "thanks", "appreciate", "grateful", "thank you",
+    }
+
+    @classmethod
+    def classify(cls, message: str) -> str:
+        """
+        Classify a user message into an intent category.
+
+        Returns one of: 'greeting', 'farewell', 'thanks', 'knowledge_question'
+        """
+        message_lower = message.lower().strip()
+
+        # Check greetings
+        if any(keyword in message_lower for keyword in cls.GREETING_KEYWORDS):
+            if len(message_lower.split()) <= 6:
+                return "greeting"
+
+        # Check farewells
+        if any(keyword in message_lower for keyword in cls.FAREWELL_KEYWORDS):
+            if len(message_lower.split()) <= 6:
+                return "farewell"
+
+        # Check thanks
+        if any(keyword in message_lower for keyword in cls.THANKS_KEYWORDS):
+            if len(message_lower.split()) <= 8:
+                return "thanks"
+
+        return "knowledge_question"
+
+    @classmethod
+    def get_response_for_intent(cls, intent: str) -> str | None:
+        """Return a canned response for non-knowledge intents, or None if RAG should be used."""
+        responses = {
+            "greeting": "Hello! I am your Responsible AI assistant. How can I help you today?",
+            "farewell": "Goodbye! Feel free to return if you have more questions.",
+            "thanks": "You are welcome! If you have any other questions, feel free to ask.",
+        }
+        return responses.get(intent)
+
+
+###############################################################################
 # Retrieval Service
 ###############################################################################
 
@@ -375,7 +440,7 @@ class RetrievalService:
     """
 
     DEFAULT_LIMIT = 5
-    MIN_SIMILARITY = 0.35
+    MIN_SIMILARITY = 0.20
 
     def __init__(
         self,
@@ -408,29 +473,19 @@ class RetrievalService:
         )
 
         for chunk in chunks:
-            
+
             embedding = self._coerce_embedding(
                 chunk.embedding
-                
+
             )
 
             similarity = self.cosine_similarity(
                 question_embedding,
                 embedding,
             )
-            print("=" * 60)
-            print("Question:", question)
-            print("Chunk:", chunk.chunk_index)
-            print("Similarity:", similarity)
-            print("Contains STOP:", "stop" in chunk.content.lower())
-            print(chunk.content[:120])
-            
 
-            print(similarity)
-            print(similarity >= self.MIN_SIMILARITY)
-
-            # if similarity < self.MIN_SIMILARITY:
-            #     continue
+            if similarity < self.MIN_SIMILARITY:
+                continue
 
             metadata = chunk.embedding_metadata or {}
 
@@ -439,11 +494,13 @@ class RetrievalService:
                     similarity,
                     {
                         "content": chunk.content,
-                        "score": similarity,
+                        "score": round(similarity, 4),
+                        "similarity": round(similarity, 4),
                         "chunk_index": chunk.chunk_index,
                         "page": metadata.get("page"),
                         "source": metadata.get("source"),
                         "title": metadata.get("title"),
+                        "document_id": str(chunk.document_id),
                     },
                 )
             )
@@ -482,9 +539,7 @@ class RetrievalService:
                 ],
             },
         )
-        print("Threshold:", self.MIN_SIMILARITY)
-        print("Total scored:", len(scored_chunks))
-        print("Returned:", len(results))
+
         return results
 
     ###########################################################################
@@ -578,7 +633,6 @@ state that the document contains conflicting information.
 7. Quote the page number whenever available.
 """
 
-
     def build_prompt(
         self,
         question,
@@ -595,7 +649,6 @@ state that the document contains conflicting information.
 
         context_sections = []
 
-
         for chunk in retrieved_chunks:
 
             # Old pipeline:
@@ -603,7 +656,6 @@ state that the document contains conflicting information.
             if isinstance(chunk, str):
                 context_sections.append(chunk)
                 continue
-
 
             # New pipeline:
             # chunk is dictionary
@@ -630,7 +682,6 @@ state that the document contains conflicting information.
                 ""
             )
 
-
             context_sections.append(
                 f"""
 SOURCE : {source}
@@ -641,25 +692,21 @@ SCORE  : {score}
 """.strip()
             )
 
-
         context = (
             "\n\n-------------------------\n\n"
             .join(context_sections)
         )
-
 
         if not context:
             context = (
                 "No relevant document context was retrieved."
             )
 
-
         history_text = (
             "\n".join(history)
             if history
             else "No previous conversation."
         )
-
 
         prompt = f"""
 {self.SYSTEM_PROMPT}

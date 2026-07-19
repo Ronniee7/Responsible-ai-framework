@@ -8,6 +8,8 @@ class DocumentUploadSerializer(serializers.Serializer):
 
     file = serializers.FileField(required=True, allow_empty_file=False)
     title = serializers.CharField(required=False, allow_blank=True)
+    dataset = serializers.CharField(required=False, allow_blank=True, default="default")
+    language = serializers.CharField(required=False, allow_blank=True, default="en")
 
 
 class DocumentMetadataSerializer(serializers.ModelSerializer):
@@ -27,6 +29,8 @@ class DocumentMetadataSerializer(serializers.ModelSerializer):
             "upload_date",
             "chunk_count",
             "embedding_count",
+            "dataset",
+            "language",
         ]
 
 
@@ -45,6 +49,8 @@ class DocumentListSerializer(serializers.ModelSerializer):
             "status",
             "upload_date",
             "chunk_count",
+            "dataset",
+            "language",
         ]
 
 

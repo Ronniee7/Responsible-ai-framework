@@ -7,7 +7,7 @@ from typing import Any
 from audit.services import AuditService
 from governance.services.governance_pipeline import GovernancePipeline
 from llm.factory import LLMFactory
-from rag.services import PromptBuilderService, RetrievalService
+from rag.services import IntentRouter, PromptBuilderService, RetrievalService
 
 
 @dataclass
@@ -51,11 +51,15 @@ class ChatMessageResult:
     # Backward compatibility
     governance: dict[str, Any] = field(default_factory=dict)
 
+    # Intent classification
+    intent: str = "knowledge_question"
+
 
 class ChatService:
     """
     Coordinates:
 
+    • Intent classification
     • Retrieval
     • Prompt construction
     • LLM generation
@@ -82,6 +86,70 @@ class ChatService:
         start_time = time.perf_counter()
 
         # ---------------------------------------------------------
+        # Intent classification
+        # ---------------------------------------------------------
+
+        intent = IntentRouter.classify(user_message)
+        canned_response = IntentRouter.get_response_for_intent(intent)
+
+        if canned_response:
+            # Non-knowledge intent - skip RAG and LLM
+            latency = round(time.perf_counter() - start_time, 4)
+
+            AuditService.log_event(
+                "non_knowledge_intent",
+                {
+                    "intent": intent,
+                    "message": user_message,
+                },
+            )
+
+            return ChatMessageResult(
+                response=canned_response,
+                provider=self.provider_name or "intent_router",
+                model="intent_router",
+                latency=latency,
+                token_usage={"prompt_tokens": 0, "response_tokens": 0, "total_tokens": 0},
+                retrieved_chunks=[],
+                retrieved_documents=[],
+                confidence={"confidence_percentage": 100.0, "confidence_level": "very_high"},
+                hallucination_score=0.0,
+                bias_score=0.0,
+                toxicity_score=0.0,
+                policy_compliant=True,
+                requires_human_review=False,
+                governance_summary={
+                    "overall_status": "PASS",
+                    "requires_human_review": False,
+                    "items": [
+                        {"check": "Intent Classification", "status": "PASS", "score": 1.0, "details": f"Classified as {intent}"}
+                    ],
+                },
+                explanation={
+                    "reasoning_summary": f"This message was classified as a {intent} and handled without RAG.",
+                    "human_readable_explanation": f"The system identified this as a {intent} and responded directly.",
+                    "confidence_explanation": "No retrieval needed for non-knowledge intents.",
+                    "governance_summary": {
+                        "overall_status": "PASS",
+                        "requires_human_review": False,
+                        "items": [
+                            {"check": "Intent Classification", "status": "PASS", "score": 1.0, "details": f"Classified as {intent}"}
+                        ],
+                    },
+                    "violation_details": [],
+                    "retrieved_sources": [],
+                },
+                governance={
+                    "toxicity_score": 0.0,
+                    "policy_compliant": True,
+                    "risk_score": 0.0,
+                    "requires_human_review": False,
+                    "summary": "Non-knowledge intent - no governance evaluation needed.",
+                },
+                intent=intent,
+            )
+
+        # ---------------------------------------------------------
         # Retrieve supporting document chunks
         # ---------------------------------------------------------
 
@@ -102,7 +170,7 @@ class ChatService:
 
         prompt = self.prompt_builder.build_prompt(
             question=user_message,
-            context_chunks=context_chunks,
+            context_chunks=retrieved_chunks,
             conversation_history=[],
         )
 
@@ -114,7 +182,7 @@ class ChatService:
 
         try:
             answer = self.llm_provider.generate_response(prompt)
-        
+
         except Exception as exc:
             AuditService.log_event(
                 "llm_provider_error",
@@ -125,31 +193,6 @@ class ChatService:
             )
             # FORCE CRASH HERE SO THE PIPELINE DOESN'T MASK IT:
             raise exc
-
-        # except Exception as exc:
-
-        #     llm_failed = True
-
-        #     AuditService.log_event(
-        #         "llm_generation_failed",
-        #         {
-        #             "provider": self.provider_name or "default",
-        #             "model": self.llm_provider.get_model_name(),
-        #             "error": str(exc),
-        #         },
-        #     )
-
-        #     if retrieved_chunks:
-        #         answer = (
-        #             "The language model is currently unavailable. "
-        #             "Relevant document context was retrieved, but a grounded "
-        #             "response could not be generated."
-        #         )
-        #     else:
-        #         answer = (
-        #             "The language model is currently unavailable and "
-        #             "no supporting document context could be retrieved."
-        #         )
 
         # ---------------------------------------------------------
         # Estimate retrieval similarity
@@ -354,4 +397,5 @@ class ChatService:
                 {},
             ),
             governance=legacy_governance,
+            intent=intent,
         )

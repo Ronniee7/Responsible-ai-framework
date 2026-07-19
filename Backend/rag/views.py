@@ -38,6 +38,14 @@ class DocumentUploadView(APIView):
             serializer.validated_data["file"],
             title=serializer.validated_data.get("title") or None,
         )
+
+        # Update dataset and language if provided
+        dataset = serializer.validated_data.get("dataset", "default")
+        language = serializer.validated_data.get("language", "en")
+        if dataset != "default" or language != "en":
+            document.dataset = dataset
+            document.language = language
+            document.save(update_fields=["dataset", "language"])
         payload = DocumentMetadataSerializer(document).data
         return Response(payload, status=status.HTTP_201_CREATED)
 
@@ -83,6 +91,18 @@ class DocumentDetailView(APIView):
         document = self._get_document(doc_id)
         if not document:
             return Response({"error": "Document not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Delete the physical file if it exists
+        import os
+        from pathlib import Path
+        storage_path = os.path.join(os.getcwd(), "uploads")
+        for file in Path(storage_path).iterdir():
+            if document.filename in file.name:
+                try:
+                    file.unlink()
+                except OSError:
+                    pass
+                break
 
         AuditService.log_event(
             "document_deleted",

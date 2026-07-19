@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from audit.services import AuditService
+from governance.models import Review
 from rag.models import Document, DocumentChunk
 
 
@@ -62,6 +63,9 @@ class DashboardService:
             passed = total_gov - policy_violation_count
             governance_pass_rate = round((passed / total_gov) * 100.0, 1)
 
+        # Get review queue size
+        review_queue_size = Review.objects.filter(status="pending").count()
+
         return {
             "documents": {
                 "total": total_documents,
@@ -78,6 +82,7 @@ class DashboardService:
                 "policy_violations": policy_violation_count,
                 "human_reviews": human_review_count,
                 "pass_rate": governance_pass_rate,
+                "review_queue_size": review_queue_size,
             },
             "providers": provider_usage,
             "timestamp": datetime.now(timezone.utc).isoformat(),

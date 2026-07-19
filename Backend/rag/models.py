@@ -34,6 +34,18 @@ class Document(models.Model):
     )
     upload_date = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=50, default="processing")
+    dataset = models.CharField(
+        max_length=255,
+        blank=True,
+        default="default",
+        help_text="Dataset or collection name for multi-dataset support",
+    )
+    language = models.CharField(
+        max_length=10,
+        blank=True,
+        default="en",
+        help_text="ISO 639-1 language code for multilingual support",
+    )
 
     class Meta:
         ordering = ["-upload_date"]
